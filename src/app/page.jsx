@@ -7,17 +7,17 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
 
+  // FETCH LIST USERS DARI WORKFLOW GET USERS
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch(process.env.NEXT_PUBLIC_N8N_GETUSERS_WEBHOOK_URL);
+        const res = await fetch(process.env.NEXT_PUBLIC_N8N_GETUSERS_WEBHOOK_URL); // GET workflow
         const data = await res.json();
         setUsers(data);
       } catch (err) {
         console.error("Gagal ambil user:", err);
       }
     };
-
     fetchUsers();
   }, []);
 
@@ -31,53 +31,63 @@ export default function Home() {
     const sampleId = form.sampleId.value;
     const sampleType = form.sampleType.value;
     const analysisRequest = form.analysisRequest.value;
-    const recipient = form.recipient.value;
+    const recipientName = form.recipient.value;
 
-    // Generate PDF
+    // CARI CHAT_ID DARI USER
+    const recipientUser = users.find(u => u.name.trim() === recipientName.trim());
+    const recipientChatId = recipientUser ? recipientUser.chat_id : null;
+
+    if (!recipientChatId) {
+      alert("Penerima tidak valid!");
+      setLoading(false);
+      return;
+    }
+
+    // GENERATE PDF
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 40;
     let y = 50;
-
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Request Analisis Sampel", margin, y);
-    y += 30;
-
+    doc.text("Request Analisis Sampel", margin, y); y += 30;
     doc.setLineWidth(1);
-    doc.line(margin, y, 595 - margin, y);
-    y += 20;
-
+    doc.line(margin, y, 595 - margin, y); y += 20;
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
     doc.text(`Pemohon: ${pengirim}`, margin, y); y += 20;
     doc.text(`Laboratorium Tujuan: ${lab}`, margin, y); y += 20;
     doc.text(`ID Sampel: ${sampleId}`, margin, y); y += 20;
     doc.text(`Jenis Sampel: ${sampleType}`, margin, y); y += 20;
-    doc.text(`Kepada: ${recipient}`, margin, y); y += 20;
+    doc.text(`Kepada: ${recipientName}`, margin, y); y += 20;
     doc.text("Permintaan Analisis:", margin, y); y += 20;
-
     const splitText = doc.splitTextToSize(analysisRequest, 595 - 2 * margin);
     doc.text(splitText, margin, y);
 
     const pdfBlob = new Blob([await doc.output("arraybuffer")], { type: "application/pdf" });
     const fileName = `${pengirim.replace(/\s+/g, "_")}_SampleRequest.pdf`;
 
+    // FORM DATA UNTUK API ROUTE
     const formData = new FormData();
     formData.append("pengirim", pengirim);
     formData.append("lab", lab);
     formData.append("sampleId", sampleId);
     formData.append("sampleType", sampleType);
     formData.append("analysisRequest", analysisRequest);
-    formData.append("recipient", recipient);
+    formData.append("recipientName", recipientName);
+    formData.append("recipientChatId", recipientChatId);
     formData.append("file", pdfBlob, fileName);
 
-    const res = await fetch("/api/send-to-n8n", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (res.ok) alert("PDF berhasil dikirim!");
-    else alert("Gagal mengirim PDF.");
+    try {
+      const res = await fetch("/api/send-to-n8n", { method: "POST", body: formData });
+      if (res.ok) alert("PDF berhasil dikirim!");
+      else {
+        const data = await res.json();
+        alert("Gagal mengirim PDF: " + (data?.error || "Unknown error"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengirim PDF.");
+    }
 
     setLoading(false);
     form.reset();
@@ -91,35 +101,19 @@ export default function Home() {
         {/* Nama Pemohon */}
         <div>
           <label className="block font-medium mb-1">Nama Pemohon</label>
-          <input
-            type="text"
-            name="pengirim"
-            placeholder="Nama Pemohon"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <input type="text" name="pengirim" placeholder="Nama Pemohon" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"/>
         </div>
 
         {/* ID Sampel */}
         <div>
           <label className="block font-medium mb-1">ID Sampel</label>
-          <input
-            type="text"
-            name="sampleId"
-            placeholder="ID Sampel"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <input type="text" name="sampleId" placeholder="ID Sampel" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"/>
         </div>
 
         {/* Laboratorium Tujuan */}
         <div>
           <label className="block font-medium mb-1">Laboratorium Tujuan</label>
-          <select
-            name="lab"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <select name="lab" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">--Pilih Lab--</option>
             <option value="Lab Kimia Industri">Lab Kimia Industri</option>
             <option value="Lab Lingkungan">Lab Lingkungan</option>
@@ -130,11 +124,7 @@ export default function Home() {
         {/* Jenis Sampel */}
         <div>
           <label className="block font-medium mb-1">Jenis Sampel</label>
-          <select
-            name="sampleType"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <select name="sampleType" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">--Pilih Jenis Sampel--</option>
             <option value="Air Pendingin">Air Pendingin</option>
             <option value="Ammonia Cair">Ammonia Cair</option>
@@ -147,11 +137,7 @@ export default function Home() {
         {/* Permintaan Analisis */}
         <div>
           <label className="block font-medium mb-1">Permintaan Analisis</label>
-          <select
-            name="analysisRequest"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <select name="analysisRequest" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">--Pilih Analisis--</option>
             <option value="Kadar Ammonia">Kadar Ammonia</option>
             <option value="pH dan Alkalinitas">pH dan Alkalinitas</option>
@@ -163,25 +149,17 @@ export default function Home() {
         </div>
 
         {/* Dropdown Penerima */}
-        <select
-          name="recipient"
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">--Pilih Penerima--</option>
-          {users.map((user, idx) => (
-            <option key={idx} value={user.name}>
-              {user.name}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className="block font-medium mb-1">Penerima</label>
+          <select name="recipient" required className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">--Pilih Penerima--</option>
+            {users.map((user) => (
+              <option key={user.chat_id} value={user.name}>{user.name}</option>
+            ))}
+          </select>
+        </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full py-2 px-4 text-white font-semibold rounded ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-            }`}
-        >
+        <button type="submit" disabled={loading} className={`w-full py-2 px-4 text-white font-semibold rounded ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>
           {loading ? "Mengirim..." : "Kirim Request"}
         </button>
       </form>

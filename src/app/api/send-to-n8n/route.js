@@ -10,10 +10,16 @@ export async function POST(req) {
     const sampleId = data.get("sampleId");
     const sampleType = data.get("sampleType");
     const analysisRequest = data.get("analysisRequest");
-    const file = data.get("file"); // Blob
+    const recipientName = data.get("recipientName"); // Nama penerima
+    const recipientChatId = data.get("recipientChatId"); // chat_id Telegram
+    const file = data.get("file"); // Blob / File
 
     if (!file) {
       return new Response(JSON.stringify({ error: "File tidak ditemukan" }), { status: 400 });
+    }
+
+    if (!recipientChatId) {
+      return new Response(JSON.stringify({ error: "Chat ID penerima tidak ditemukan" }), { status: 400 });
     }
 
     // FormData untuk dikirim ke n8n
@@ -23,6 +29,8 @@ export async function POST(req) {
     n8nForm.append("sampleId", sampleId);
     n8nForm.append("sampleType", sampleType);
     n8nForm.append("analysisRequest", analysisRequest);
+    n8nForm.append("recipientName", recipientName);
+    n8nForm.append("recipientChatId", recipientChatId);
     n8nForm.append("file", file, file.name);
 
     // Kirim ke n8n
@@ -32,7 +40,8 @@ export async function POST(req) {
     });
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Gagal kirim ke n8n" }), { status: 500 });
+      const text = await res.text();
+      return new Response(JSON.stringify({ error: "Gagal kirim ke n8n", details: text }), { status: 500 });
     }
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
