@@ -1,10 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { jsPDF } from "jspdf";
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_N8N_GETUSERS_WEBHOOK_URL);
+        const data = await res.json();
+        setUsers(data);
+      } catch (err) {
+        console.error("Gagal ambil user:", err);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,6 +31,7 @@ export default function Home() {
     const sampleId = form.sampleId.value;
     const sampleType = form.sampleType.value;
     const analysisRequest = form.analysisRequest.value;
+    const recipient = form.recipient.value;
 
     // Generate PDF
     const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -37,12 +53,12 @@ export default function Home() {
     doc.text(`Laboratorium Tujuan: ${lab}`, margin, y); y += 20;
     doc.text(`ID Sampel: ${sampleId}`, margin, y); y += 20;
     doc.text(`Jenis Sampel: ${sampleType}`, margin, y); y += 20;
+    doc.text(`Kepada: ${recipient}`, margin, y); y += 20;
     doc.text("Permintaan Analisis:", margin, y); y += 20;
 
     const splitText = doc.splitTextToSize(analysisRequest, 595 - 2 * margin);
     doc.text(splitText, margin, y);
 
-    // Blob untuk Edge runtime
     const pdfBlob = new Blob([await doc.output("arraybuffer")], { type: "application/pdf" });
     const fileName = `${pengirim.replace(/\s+/g, "_")}_SampleRequest.pdf`;
 
@@ -52,9 +68,9 @@ export default function Home() {
     formData.append("sampleId", sampleId);
     formData.append("sampleType", sampleType);
     formData.append("analysisRequest", analysisRequest);
+    formData.append("recipient", recipient);
     formData.append("file", pdfBlob, fileName);
 
-    // Kirim ke API route
     const res = await fetch("/api/send-to-n8n", {
       method: "POST",
       body: formData,
@@ -68,15 +84,104 @@ export default function Home() {
   };
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1>Form Request Analisis Sampel</h1>
-      <form onSubmit={handleSubmit}>
-        <input type="text" name="pengirim" placeholder="Nama Pemohon" required /><br /><br />
-        <input type="text" name="lab" placeholder="Laboratorium Tujuan" required /><br /><br />
-        <input type="text" name="sampleId" placeholder="ID Sampel" required /><br /><br />
-        <input type="text" name="sampleType" placeholder="Jenis Sampel" required /><br /><br />
-        <textarea name="analysisRequest" placeholder="Jenis Analisis yang Diminta" required /><br /><br />
-        <button type="submit" disabled={loading}>
+    <div className="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-md mt-10">
+      <h1 className="text-2xl font-bold mb-6 text-center">Form Request Analisis Sampel</h1>
+      <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Nama Pemohon */}
+        <div>
+          <label className="block font-medium mb-1">Nama Pemohon</label>
+          <input
+            type="text"
+            name="pengirim"
+            placeholder="Nama Pemohon"
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* ID Sampel */}
+        <div>
+          <label className="block font-medium mb-1">ID Sampel</label>
+          <input
+            type="text"
+            name="sampleId"
+            placeholder="ID Sampel"
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Laboratorium Tujuan */}
+        <div>
+          <label className="block font-medium mb-1">Laboratorium Tujuan</label>
+          <select
+            name="lab"
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">--Pilih Lab--</option>
+            <option value="Lab Kimia Industri">Lab Kimia Industri</option>
+            <option value="Lab Lingkungan">Lab Lingkungan</option>
+            <option value="Lab Gas dan Emisi">Lab Gas dan Emisi</option>
+          </select>
+        </div>
+
+        {/* Jenis Sampel */}
+        <div>
+          <label className="block font-medium mb-1">Jenis Sampel</label>
+          <select
+            name="sampleType"
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">--Pilih Jenis Sampel--</option>
+            <option value="Air Pendingin">Air Pendingin</option>
+            <option value="Ammonia Cair">Ammonia Cair</option>
+            <option value="Uap Gas">Uap Gas</option>
+            <option value="Bahan Baku">Bahan Baku</option>
+            <option value="Limbah Cair">Limbah Cair</option>
+          </select>
+        </div>
+
+        {/* Permintaan Analisis */}
+        <div>
+          <label className="block font-medium mb-1">Permintaan Analisis</label>
+          <select
+            name="analysisRequest"
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">--Pilih Analisis--</option>
+            <option value="Kadar Ammonia">Kadar Ammonia</option>
+            <option value="pH dan Alkalinitas">pH dan Alkalinitas</option>
+            <option value="Kadar Logam Berat">Kadar Logam Berat</option>
+            <option value="Kadar Nitrat/Nitrit">Kadar Nitrat/Nitrit</option>
+            <option value="Emisi Gas NOx">Emisi Gas NOx</option>
+            <option value="Kandungan Bahan Baku">Kandungan Bahan Baku</option>
+          </select>
+        </div>
+
+        {/* Dropdown Penerima */}
+        <select
+          name="recipient"
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">--Pilih Penerima--</option>
+          {users.map((user, idx) => (
+            <option key={idx} value={user.name}>
+              {user.name}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full py-2 px-4 text-white font-semibold rounded ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
+            }`}
+        >
           {loading ? "Mengirim..." : "Kirim Request"}
         </button>
       </form>
