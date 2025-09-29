@@ -1,68 +1,84 @@
-'use client';
-import { useState } from 'react';
-import { jsPDF } from 'jspdf';
+"use client";
 
-export default function Page() {
-  const [pengirim, setPengirim] = useState('');
-  const [lab, setLab] = useState('');
-  const [sampleId, setSampleId] = useState('');
-  const [sampleType, setSampleType] = useState('');
-  const [analysisRequest, setAnalysisRequest] = useState('');
+import { useState } from "react";
+import { jsPDF } from "jspdf";
+
+export default function Home() {
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+
+    const form = e.target;
+    const pengirim = form.pengirim.value;
+    const lab = form.lab.value;
+    const sampleId = form.sampleId.value;
+    const sampleType = form.sampleType.value;
+    const analysisRequest = form.analysisRequest.value;
 
     // Generate PDF
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 40;
     let y = 50;
 
     doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Request Analisis Sampel', margin, y);
+    doc.setFont("helvetica", "bold");
+    doc.text("Request Analisis Sampel", margin, y);
     y += 30;
+
     doc.setLineWidth(1);
     doc.line(margin, y, 595 - margin, y);
     y += 20;
 
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont("helvetica", "normal");
     doc.text(`Pemohon: ${pengirim}`, margin, y); y += 20;
     doc.text(`Laboratorium Tujuan: ${lab}`, margin, y); y += 20;
     doc.text(`ID Sampel: ${sampleId}`, margin, y); y += 20;
     doc.text(`Jenis Sampel: ${sampleType}`, margin, y); y += 20;
+    doc.text("Permintaan Analisis:", margin, y); y += 20;
 
-    doc.text('Permintaan Analisis:', margin, y); y += 20;
     const splitText = doc.splitTextToSize(analysisRequest, 595 - 2 * margin);
     doc.text(splitText, margin, y);
 
-    const pdfBlob = doc.output('blob');
-    const fileName = `${pengirim.replace(/\s+/g, '_')}_SampleRequest.pdf`;
+    // Blob untuk Edge runtime
+    const pdfBlob = new Blob([await doc.output("arraybuffer")], { type: "application/pdf" });
+    const fileName = `${pengirim.replace(/\s+/g, "_")}_SampleRequest.pdf`;
+
+    const formData = new FormData();
+    formData.append("pengirim", pengirim);
+    formData.append("lab", lab);
+    formData.append("sampleId", sampleId);
+    formData.append("sampleType", sampleType);
+    formData.append("analysisRequest", analysisRequest);
+    formData.append("file", pdfBlob, fileName);
 
     // Kirim ke API route
-    const formData = new FormData();
-    formData.append('pengirim', pengirim);
-    formData.append('lab', lab);
-    formData.append('sampleId', sampleId);
-    formData.append('sampleType', sampleType);
-    formData.append('analysisRequest', analysisRequest);
-    formData.append('file', pdfBlob, fileName);
+    const res = await fetch("/api/send-to-n8n", {
+      method: "POST",
+      body: formData,
+    });
 
-    const res = await fetch('/api/send-to-n8n', { method: 'POST', body: formData });
-    if (res.ok) alert(`PDF berhasil dikirim sebagai "${fileName}"!`);
-    else alert('Terjadi kesalahan.');
+    if (res.ok) alert("PDF berhasil dikirim!");
+    else alert("Gagal mengirim PDF.");
+
+    setLoading(false);
+    form.reset();
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: 'auto', padding: 20 }}>
+    <div style={{ padding: "2rem" }}>
       <h1>Form Request Analisis Sampel</h1>
       <form onSubmit={handleSubmit}>
-        <input type="text" placeholder="Nama Pemohon" value={pengirim} onChange={e => setPengirim(e.target.value)} required /><br/><br/>
-        <input type="text" placeholder="Laboratorium Tujuan" value={lab} onChange={e => setLab(e.target.value)} required /><br/><br/>
-        <input type="text" placeholder="ID Sampel" value={sampleId} onChange={e => setSampleId(e.target.value)} required /><br/><br/>
-        <input type="text" placeholder="Jenis Sampel" value={sampleType} onChange={e => setSampleType(e.target.value)} required /><br/><br/>
-        <textarea placeholder="Jenis Analisis yang Diminta" value={analysisRequest} onChange={e => setAnalysisRequest(e.target.value)} required /><br/><br/>
-        <button type="submit">Kirim Request</button>
+        <input type="text" name="pengirim" placeholder="Nama Pemohon" required /><br /><br />
+        <input type="text" name="lab" placeholder="Laboratorium Tujuan" required /><br /><br />
+        <input type="text" name="sampleId" placeholder="ID Sampel" required /><br /><br />
+        <input type="text" name="sampleType" placeholder="Jenis Sampel" required /><br /><br />
+        <textarea name="analysisRequest" placeholder="Jenis Analisis yang Diminta" required /><br /><br />
+        <button type="submit" disabled={loading}>
+          {loading ? "Mengirim..." : "Kirim Request"}
+        </button>
       </form>
     </div>
   );
